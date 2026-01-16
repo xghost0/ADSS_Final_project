@@ -72,3 +72,23 @@ This means BCC cannot find the `pam_get_authtok` function in the library file.
 
 ## Files
 -   `pam_spy.py`: The Python script containing the inline C eBPF code and the user-space loader.
+
+## Future Extensions & Offensive Scenarios
+
+For the purpose of the "Observability vs. Exploitation" project, here are theoretical ways this PoC could be extended into a more sophisticated threat:
+
+### 1. Data Exfiltration
+Currently, the data is printed to the local trace pipe. An attacker would want to move this off-box discreetly:
+-   **DNS Tunneling**: The BPF program could trigger a DNS query to a domain controlled by the attacker (e.g., `password.attacker.com`). This often bypasses firewalls.
+-   **eBPF Sk_msg**: Use `bpf_sk_msg` helpers to inject the captured data directly into an existing network socket (e.g., piggybacking on an SSH connection).
+-   **Hidden File Write**: Periodically write the captured credentials to a world-writable location (like `/dev/shm` or `/tmp`) that looks like a temporary system file.
+
+### 2. Persistence
+This script stops when the python process is killed. Persistence strategies include:
+-   **Systemd Service**: Hiding as a legitimate-looking service (e.g., `systemd-journal-helper`).
+-   **BPF Pinning**: "Pinning" the BPF program to the filesystem (`/sys/fs/bpf/`). Even if the userspace loader dies, the BPF program remains attached and running in the kernel. A new loader can reconnect later to read the map.
+
+### 3. Evasion & Anti-Forensics
+-   **Map Erasure**: Immediately deleting the map entry after reading (implemented) avoids leaving data in memory for long.
+-   **Hooking Lower**: Instead of PAM (user-space), hooking `sys_read` on TTY file descriptors functions as a kernel-level keylogger, which is harder for user-space antivirus to detect.
+
