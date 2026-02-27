@@ -1,0 +1,178 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.3 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{none/global//global/global/global}
+    \entry{gregg2019}{book}{}{}
+      \name{author}{1}{}{%
+        {{hash=b45aef384111d7e9dd71b74ba427b5f1}{%
+           family={Gregg},
+           familyi={G\bibinitperiod},
+           given={Brendan},
+           giveni={B\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {Addison-Wesley Professional}%
+      }
+      \strng{namehash}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{fullhash}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{fullhashraw}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{bibnamehash}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{authorbibnamehash}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{authornamehash}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{authorfullhash}{b45aef384111d7e9dd71b74ba427b5f1}
+      \strng{authorfullhashraw}{b45aef384111d7e9dd71b74ba427b5f1}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{isbn}{978-0136554820}
+      \field{title}{{BPF} Performance Tools: {Linux} System and Application Observability}
+      \field{year}{2019}
+    \endentry
+    \entry{kernel_uprobe}{online}{}{}
+      \name{author}{1}{}{%
+        {{hash=e920b2a6acbc8717a788344636e52d1c}{%
+           family={Dronamraju},
+           familyi={D\bibinitperiod},
+           given={Srikar},
+           giveni={S\bibinitperiod}}}%
+      }
+      \strng{namehash}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{fullhash}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{fullhashraw}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{bibnamehash}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{authorbibnamehash}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{authornamehash}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{authorfullhash}{e920b2a6acbc8717a788344636e52d1c}
+      \strng{authorfullhashraw}{e920b2a6acbc8717a788344636e52d1c}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Uprobe-tracer: Uprobe-based Event Tracing}
+      \field{urlday}{27}
+      \field{urlmonth}{2}
+      \field{urlyear}{2026}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://www.kernel.org/doc/html/latest/trace/uprobetracer.html
+      \endverb
+      \verb{url}
+      \verb https://www.kernel.org/doc/html/latest/trace/uprobetracer.html
+      \endverb
+    \endentry
+    \entry{bcc_repo}{online}{}{}
+      \name{author}{1}{}{%
+        {{hash=64b251de2b1ae88f880127918e8fcda5}{%
+           family={{IO Visor Project}},
+           familyi={I\bibinitperiod}}}%
+      }
+      \strng{namehash}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{fullhash}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{fullhashraw}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{bibnamehash}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{authorbibnamehash}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{authornamehash}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{authorfullhash}{64b251de2b1ae88f880127918e8fcda5}
+      \strng{authorfullhashraw}{64b251de2b1ae88f880127918e8fcda5}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{{BCC} -- Tools for {BPF}-based {Linux} {IO} analysis, networking, monitoring, and more}
+      \field{urlday}{27}
+      \field{urlmonth}{2}
+      \field{urlyear}{2026}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/iovisor/bcc
+      \endverb
+      \verb{url}
+      \verb https://github.com/iovisor/bcc
+      \endverb
+    \endentry
+    \entry{pam_docs}{online}{}{}
+      \name{author}{1}{}{%
+        {{hash=4f80bebdd704023fe9980922ca064d3d}{%
+           family={{The Linux Man-Pages Project}},
+           familyi={T\bibinitperiod}}}%
+      }
+      \strng{namehash}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{fullhash}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{fullhashraw}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{bibnamehash}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{authorbibnamehash}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{authornamehash}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{authorfullhash}{4f80bebdd704023fe9980922ca064d3d}
+      \strng{authorfullhashraw}{4f80bebdd704023fe9980922ca064d3d}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{{PAM}(8) -- {Linux} manual page}
+      \field{urlday}{27}
+      \field{urlmonth}{2}
+      \field{urlyear}{2026}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://man7.org/linux/man-pages/man8/pam.8.html
+      \endverb
+      \verb{url}
+      \verb https://man7.org/linux/man-pages/man8/pam.8.html
+      \endverb
+    \endentry
+    \entry{openssl_docs}{online}{}{}
+      \name{author}{1}{}{%
+        {{hash=90a97d68cacba4966e7bf191b803e11c}{%
+           family={{OpenSSL Software Foundation}},
+           familyi={O\bibinitperiod}}}%
+      }
+      \strng{namehash}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{fullhash}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{fullhashraw}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{bibnamehash}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{authorbibnamehash}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{authornamehash}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{authorfullhash}{90a97d68cacba4966e7bf191b803e11c}
+      \strng{authorfullhashraw}{90a97d68cacba4966e7bf191b803e11c}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{{SSL\_read}(3) -- {OpenSSL} Documentation}
+      \field{urlday}{27}
+      \field{urlmonth}{2}
+      \field{urlyear}{2026}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://docs.openssl.org/master/man3/SSL_read
+      \endverb
+      \verb{url}
+      \verb https://docs.openssl.org/master/man3/SSL_read
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+
