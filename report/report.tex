@@ -10,6 +10,7 @@
 \usepackage{xcolor}
 \usepackage{listings}
 \usepackage{booktabs}
+\usepackage{tabularx}
 \usepackage{enumitem}
 \usepackage{amsmath}
 \usepackage{caption}
@@ -89,7 +90,7 @@
 % --- Header / Footer ---
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textit{ADSS -- Serverless Credential Theft with eBPF Uprobes}}
+\fancyhead[L]{\small\textit{Advanced System Security -- Serverless Credential Theft with eBPF Uprobes}}
 \fancyhead[R]{\small\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
@@ -110,7 +111,7 @@
     \vspace*{2cm}
 
     {\Large Hochschule Luzern -- Informatik\\[0.3em]}
-    {\large Advanced Security (ADSS) -- Final Project\\[2cm]}
+    {\large Advanced System Security (ADSS) -- Final Project\\[2cm]}
 
     \rule{\textwidth}{1pt}\\[0.6cm]
     {\Huge\bfseries Serverless Credential Theft\\with eBPF Uprobes\\[0.4cm]}
@@ -121,9 +122,11 @@
 
     {\large
     \begin{tabular}{ll}
-        \textbf{Author:}  & TODO \\
+        \textbf{Authors:} & Author 1 \\
+                           & Author 2 \\
+                           & Author 3 \\[0.5em]
         \textbf{Date:}    & \today \\
-        \textbf{Module:}  & Advanced Security (ADSS) \\
+        \textbf{Module:}  & Advanced System Security (ADSS) \\
     \end{tabular}
     }
 
@@ -152,7 +155,7 @@ This project demonstrates a fundamentally different approach:
 \textbf{serverless credential theft using eBPF user-space probes (uprobes)}.
 Rather than recording all input or attempting to break encryption, the technique
 places a precise, surgical tap at the exact point in memory where a password or
-plaintext payload exists---after decryption but before hashing or further
+plaintext payload exists, after decryption but before hashing or further
 processing.
 
 The core idea is analogous to a sniper rifle versus a dragnet: instead of
@@ -208,14 +211,14 @@ Key properties of eBPF relevant to this project:
     \item \textbf{Safety guarantees.} Before loading, every eBPF program is
           analyzed by an in-kernel verifier that ensures the program terminates,
           does not access out-of-bounds memory, and does not crash the kernel.
-          This makes eBPF programs safe to run---ironically, even when their
+          This makes eBPF programs safe to run, ironically, even when their
           intent is malicious.
     \item \textbf{Minimal overhead.} eBPF programs are JIT-compiled to native
           machine code. An attached probe fires only when its hook point is
           triggered, making the technique essentially zero-cost when idle.
     \item \textbf{Root-only loading.} Loading eBPF programs requires
           \texttt{CAP\_BPF} (or \texttt{CAP\_SYS\_ADMIN} on older kernels).
-          This means the attacker must already have root access---the technique
+          This means the attacker must already have root access; the technique
           is a post-exploitation persistence and data collection mechanism,
           not an initial access vector.
     \item \textbf{No kernel module required.} Unlike traditional rootkits that
@@ -307,7 +310,7 @@ int pam_get_authtok(pam_handle_t *pamh, int item,
                     const char **authtok, const char *prompt);
 \end{lstlisting}
 
-The third parameter (\texttt{authtok}) is an output pointer---on return,
+The third parameter (\texttt{authtok}) is an output pointer: on return,
 \texttt{*authtok} contains the address of the cleartext password string. This
 is the value we intercept.
 
@@ -410,18 +413,18 @@ and return probes within the same function invocation:
 \centering
 \caption{eBPF hash maps used in the tool.}
 \label{tab:maps}
-\begin{tabular}{@{}llll@{}}
+\begin{tabularx}{\textwidth}{@{}lllX@{}}
 \toprule
 \textbf{Map Name}      & \textbf{Key}  & \textbf{Value}      & \textbf{Purpose} \\
 \midrule
-\texttt{pam\_params\_map} & Thread ID & \texttt{char **} (pointer to authtok) & Pass authtok address from entry to return \\
-\texttt{ssl\_read\_map}   & Thread ID & \texttt{char *} (buffer address)      & Pass buffer address from entry to return \\
+\texttt{pam\_params\_map} & Thread ID & \texttt{char **} (authtok pointer) & Pass authtok address from entry to return \\
+\texttt{ssl\_read\_map}   & Thread ID & \texttt{char *} (buffer address)   & Pass buffer address from entry to return \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 Maps are necessary because CPU registers are not preserved between the entry
-probe and the return probe---the function execution overwrites them. By storing
+probe and the return probe, since the function execution overwrites them. By storing
 the relevant pointer in a map keyed by the current thread ID, the return probe
 can retrieve it and dereference the now-populated output parameter.
 
@@ -479,7 +482,7 @@ int trace_pam_return(struct pt_regs *ctx) {
 \end{lstlisting}
 
 The double indirection is necessary because \texttt{pam\_get\_authtok} takes a
-\texttt{const char **authtok}---a pointer to a pointer. At entry, we capture the
+\texttt{const char **authtok}, i.e.\ a pointer to a pointer. At entry, we capture the
 address of the pointer (\texttt{char **}). At return, we first read where the
 pointer now points (\texttt{char *}), then read the string at that address.
 
@@ -597,8 +600,8 @@ Content-Type: text/html
 \end{lstlisting}
 
 The full HTTP request and response are captured in cleartext, despite the
-connection being encrypted with TLS. Any sensitive data in transit---cookies,
-authorization headers, API keys, POST bodies---would be visible.
+connection being encrypted with TLS. Any sensitive data in transit (cookies,
+authorization headers, API keys, POST bodies) would be visible.
 
 % ----------------------------------------------------------------------------
 \subsection{Scenario 3: SSH Server-Side Password Capture}
@@ -642,8 +645,8 @@ $ sudo bpftool prog list
 42: kprobe  name trace_pam_entry  tag abc123  gpl
 43: kprobe  name trace_pam_return tag def456  gpl
         \end{lstlisting}
-        Any unexpected programs---especially those with names referencing
-        \texttt{pam}, \texttt{ssl}, or \texttt{trace}---warrant investigation.
+        Any unexpected programs, especially those with names referencing
+        \texttt{pam}, \texttt{ssl}, or \texttt{trace}, warrant investigation.
 
     \item[Uprobe event inspection.]
         Active uprobes are listed in the kernel's tracefs:
@@ -695,7 +698,7 @@ $ sudo auditctl -a always,exit -F arch=b64 -S bpf -k ebpf_audit
     \item[Runtime integrity monitoring.]
         Tools like \textbf{Tracee} (by Aqua Security) or \textbf{Falco}
         (by Sysdig) use eBPF themselves to monitor for suspicious eBPF program
-        loads and attachment events---essentially using the technology to defend
+        loads and attachment events, essentially using the technology to defend
         against itself.
 
     \item[Hardware security tokens.]
@@ -791,7 +794,7 @@ a traditional rootkit.
 
 The technique exploits a fundamental architectural property: shared libraries
 are loaded into every process that uses them, and uprobes are system-wide. A
-single probe attachment intercepts calls from \textit{all} processes---every
+single probe attachment intercepts calls from \textit{all} processes: every
 \texttt{sudo}, \texttt{su}, \texttt{ssh} login, \texttt{curl} request, and
 Python HTTPS call on the system.
 
